@@ -34,11 +34,15 @@
             download: true,
             complete: function(results) {
                 const data = results.data.filter(row => row.InvoiceDate && row.running_total && row.Country);
-                // Prepare line chart data (sum running_total by date)
+
+                // Prepare line chart data (max running_total by date)
                 const dateMap = {};
                 data.forEach(row => {
-                    if (!dateMap[row.InvoiceDate]) dateMap[row.InvoiceDate] = 0;
-                    dateMap[row.InvoiceDate] += parseFloat(row.running_total);
+                    const date = row.InvoiceDate;
+                    const val = parseFloat(row.running_total);
+                    if (!isNaN(val)) {
+                        if (!dateMap[date] || val > dateMap[date]) dateMap[date] = val;
+                    }
                 });
                 const dates = Object.keys(dateMap).sort();
                 const runningTotals = dates.map(d => dateMap[d]);
