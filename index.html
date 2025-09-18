@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sales Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        body { display: flex; flex-direction: row; height: 100vh; margin: 0; }
+        #left { flex: 2; display: flex; align-items: center; justify-content: center; }
+        #right { flex: 2; display: flex; align-items: center; justify-content: center; }
+        #lineChart, #map { width: 90%; height: 80%; }
+    </style>
+</head>
+<body>
+    <div id="left">
+        <canvas id="lineChart"></canvas>
+    </div>
+    <div id="right">
+        <div id="map"></div>
+    </div>
+        <script>
+        // Helper: group by key
+        function groupBy(arr, key) {
+            return arr.reduce((acc, x) => {
+                (acc[x[key]] = acc[x[key]] || []).push(x);
+                return acc;
+            }, {});
+        }
+
+        Papa.parse('salesinfo.csv', {
+            header: true,
+            download: true,
+            complete: function(results) {
+                const data = results.data.filter(row => row.InvoiceDate && row.running_total && row.Country);
+                // Prepare line chart data (sum running_total by date)
+                const dateMap = {};
+                data.forEach(row => {
+                    if (!dateMap[row.InvoiceDate]) dateMap[row.InvoiceDate] = 0;
+                    dateMap[row.InvoiceDate] += parseFloat(row.running_total);
+                });
+                const dates = Object.keys(dateMap).sort();
+                const runningTotals = dates.map(d => dateMap[d]);
+
+                // Line chart
+                const ctx = document.getElementById('lineChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: dates,
+                        datasets: [{
+                            label: 'Running Total of Sales',
+                            data: runningTotals,
+                            borderColor: 'blue',
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: { x: { title: { display: true, text: 'Date' } }, y: { title: { display: true, text: 'Running Total' } } }
+                    }
+                });
+
+                // Prepare map data (max running_total by country)
+                const countryMap = {};
+                data.forEach(row => {
+                    const c = row.Country;
+                    const val = parseFloat(row.running_total);
+                    if (!isNaN(val) && (!countryMap[c] || val > countryMap[c])) countryMap[c] = val;
+                });
+                const countries = Object.keys(countryMap);
+                const countryTotals = countries.map(c => countryMap[c]);
+
+                // Find min/max for color scaling
+                const zmin = Math.min(...countryTotals);
+                const zmax = Math.max(...countryTotals);
+
+                // Map
+                var mapData = [{
+                    type: 'choropleth',
+                    locationmode: 'country names',
+                    locations: countries,
+                    z: countryTotals,
+                    zmin: zmin,
+                    zmax: zmax,
+                    colorscale: 'Blues',
+                    colorbar: { title: 'Total Sales' },
+                    marker: { line: { color: 'gray', width: 0.5 } }
+                }];
+                var layout = {
+                    geo: { projection: { type: 'natural earth' } },
+                    margin: { t: 0, b: 0, l: 0, r: 0 },
+                    width: 700, height: 500
+                };
+                Plotly.newPlot('map', mapData, layout, {responsive: true});
+            }
+        });
+        </script>
+</body>
+</html>
